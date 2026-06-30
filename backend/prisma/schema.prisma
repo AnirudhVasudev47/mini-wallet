@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String        @unique @map("user_id")
+  name          String
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  user          User?
+  ledgerEntries LedgerEntry[]
+
+  @@map("accounts")
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  userId       String   @unique @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  account      Account  @relation(fields: [userId], references: [userId])
+
+  @@map("users")
+}
+
+model LedgerEntry {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId  String   @map("transaction_id")
+  userId         String   @map("user_id")
+  amount         Decimal  @db.Decimal(15, 2)
+  counterpartyId String   @map("counterparty_id")
+  description    String?
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  account        Account  @relation(fields: [userId], references: [userId])
+
+  @@unique([transactionId, userId], map: "idx_ledger_idempotency")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_ledger_user")
+  @@map("ledger_entries")
+}
