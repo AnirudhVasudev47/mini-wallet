@@ -1,224 +1,225 @@
 # Mini Wallet — Ledger-based Transaction System
 
-A minimal full-stack financial system with account management, money transfers, transaction tracking, and balance visibility.
+A full-stack digital wallet system built with double-entry bookkeeping, JWT authentication, and idempotent money transfers. Users can register, deposit funds, and transfer money between accounts with full transaction history.
+
+## 🌐 Live Demo
+
+| Service  | URL                                                                                                                     |
+|----------|-------------------------------------------------------------------------------------------------------------------------|
+| Frontend | [mini-wallet-frontend-883639585183.asia-south1.run.app](https://mini-wallet-frontend-883639585183.asia-south1.run.app)   |
+| Backend  | [mini-wallet-api-883639585183.asia-south1.run.app](https://mini-wallet-api-883639585183.asia-south1.run.app)             |
+| API Docs | [mini-wallet-api-…/api/docs](https://mini-wallet-api-883639585183.asia-south1.run.app/api/docs)                         |
+
+> Hosted on **Google Cloud Run** (asia-south1) with **Cloud SQL** PostgreSQL 16.
+
+---
 
 ## Tech Stack
 
-| Layer    | Technology                           |
-|----------|--------------------------------------|
-| Backend  | Node.js, Express.js, TypeScript      |
-| Database | PostgreSQL (via `pg`)                |
-| Frontend | Next.js, React, shadcn/ui, Tailwind |
+| Layer     | Technology                                           |
+|-----------|------------------------------------------------------|
+| Backend   | Node.js, Express 5, TypeScript, Prisma ORM           |
+| Database  | PostgreSQL 16 (`NUMERIC(15,2)` for money, `SERIALIZABLE` isolation) |
+| Frontend  | Next.js 15, React, shadcn/ui, Tailwind CSS           |
+| Auth      | JWT (HS256, 7-day expiry), bcrypt password hashing    |
+| Docs      | Swagger / OpenAPI 3.0 (swagger-jsdoc + swagger-ui-express) |
+| Hosting   | Google Cloud Run + Cloud SQL                         |
+
+---
+
+## Project Structure
+
+```
+mini_wallet/
+├── backend/                  # Express API server
+│   ├── src/
+│   │   ├── index.ts          # App entry point, middleware, Swagger UI mount
+│   │   ├── swagger.ts        # OpenAPI spec definition & schemas
+│   │   ├── database.ts       # Prisma client singleton, SYSTEM account seeding
+│   │   ├── types.ts          # Domain types, request/response interfaces
+│   │   ├── routes/           # Route handlers with OpenAPI annotations
+│   │   │   ├── auth.ts       # POST /register, POST /login, GET /me
+│   │   │   ├── accounts.ts   # GET /, GET /:id/balance, POST /:id/deposit, GET /:id/transactions
+│   │   │   └── transfers.ts  # POST /transfers
+│   │   ├── middleware/
+│   │   │   ├── auth.ts       # JWT verification, ownership check
+│   │   │   └── validate.ts   # Request body validation
+│   │   └── services/         # Business logic layer
+│   │       ├── authService.ts
+│   │       ├── accountService.ts
+│   │       └── transferService.ts
+│   ├── prisma/
+│   │   └── schema.prisma     # Database schema (Account, User, LedgerEntry)
+│   └── tests/                # Integration tests (Jest + Supertest)
+├── frontend/                 # Next.js web application
+├── docker-compose.yml        # PostgreSQL local dev setup
+└── AI_USAGE.md               # AI-assisted development documentation
+```
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Node.js** ≥ 18 (for `crypto.randomUUID()`)
+- **Node.js** ≥ 18 (required for `crypto.randomUUID()`)
 - **npm** ≥ 9
-- **PostgreSQL** ≥ 14
+- **PostgreSQL** ≥ 14 (or Docker)
 
-### Database Setup
+### 1. Database Setup
 
 **Option A: Docker (recommended)**
 ```bash
-docker compose up -d    # starts PostgreSQL on port 5432
+docker compose up -d    # starts PostgreSQL 16 on port 5432
 ```
 
 **Option B: Local PostgreSQL**
 ```bash
-createdb mini_wallet    # schema is auto-created on first run
+createdb mini_wallet
 ```
 
-The backend connects to `postgresql://localhost:5432/mini_wallet` by default. Override with the `DATABASE_URL` environment variable.
-
-### Backend Setup
+### 2. Backend Setup
 
 ```bash
 cd backend
+cp .env.example .env     # configure DATABASE_URL, JWT_SECRET, PORT
 npm install
-npm run dev      # starts on http://localhost:8000
+npx prisma generate      # generate Prisma client
+npx prisma db push       # sync schema to database
+npm run dev              # starts on http://localhost:8000
 ```
 
-### Frontend Setup
+**Environment Variables:**
+
+| Variable          | Required | Default | Description                        |
+|-------------------|----------|---------|------------------------------------|
+| `DATABASE_URL`    | Yes      | —       | PostgreSQL connection string       |
+| `JWT_SECRET`      | Yes      | —       | Secret key for signing JWTs        |
+| `PORT`            | No       | `8000`  | Server port                        |
+| `ALLOWED_ORIGINS` | No       | `*`     | Comma-separated CORS origins       |
+
+### 3. Frontend Setup
 
 ```bash
 cd frontend
 npm install
-npm run dev      # starts on http://localhost:3000
+npm run dev              # starts on http://localhost:3000
 ```
 
-> **Note:** The frontend expects the backend to be running on `http://localhost:8000`. To change this, set the `NEXT_PUBLIC_API_URL` environment variable.
+> The frontend expects the backend at `http://localhost:8000`. Override with `NEXT_PUBLIC_API_URL`.
 
 ---
 
 ## API Documentation
 
+### Interactive Docs (Swagger UI)
+
+Once the backend is running, visit:
+
+- **Swagger UI:** [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+- **OpenAPI JSON:** [http://localhost:8000/api/docs.json](http://localhost:8000/api/docs.json)
+
+The Swagger UI supports "Try it out" — you can register, login, copy the JWT token into the Authorize dialog, and test all authenticated endpoints interactively.
+
+### API Endpoints Summary
+
 Base URL: `http://localhost:8000/api/v1`
 
-### Accounts
+#### Auth (`/auth`)
 
-#### `POST /accounts`
+| Method | Endpoint         | Auth | Description                              |
+|--------|------------------|------|------------------------------------------|
+| POST   | `/auth/register` | No   | Create user + wallet account             |
+| POST   | `/auth/login`    | No   | Authenticate and receive JWT             |
+| GET    | `/auth/me`       | Yes  | Get current user profile                 |
 
-Create a new account.
+#### Accounts (`/accounts`)
 
-**Request:**
-```json
-{ "account_id": "alice", "name": "Alice Johnson" }
-```
+| Method | Endpoint                      | Auth | Description                              |
+|--------|-------------------------------|------|------------------------------------------|
+| GET    | `/accounts`                   | Yes  | List all accounts with balances          |
+| GET    | `/accounts/:id/balance`       | Yes¹ | Get balance for a specific account       |
+| POST   | `/accounts/:id/deposit`       | Yes¹ | Deposit funds into account               |
+| GET    | `/accounts/:id/transactions`  | Yes¹ | Get transaction history (most recent first) |
 
-**Response (201):**
-```json
-{ "account_id": "alice", "name": "Alice Johnson", "created_at": "2026-06-29 12:00:00" }
-```
+#### Transfers (`/transfers`)
 
-**Errors:** `409` if account already exists, `400` if fields are missing.
+| Method | Endpoint     | Auth | Description                                       |
+|--------|--------------|------|---------------------------------------------------|
+| POST   | `/transfers` | Yes  | Transfer money between accounts (idempotent)      |
 
----
-
-#### `GET /accounts`
-
-List all accounts with their computed balances.
-
-**Response (200):**
-```json
-[
-  { "account_id": "alice", "name": "Alice Johnson", "balance": 300.00, "created_at": "..." },
-  { "account_id": "bob", "name": "Bob Smith", "balance": 200.00, "created_at": "..." }
-]
-```
+> ¹ **Owner-only:** The `:id` parameter must match the authenticated user's `user_id`.
 
 ---
 
-#### `GET /accounts/:id/balance`
+## Design Decisions & Assumptions
 
-Get balance for a specific account.
+### 1. Double-Entry Ledger Model
 
-**Response (200):**
-```json
-{ "account_id": "alice", "balance": 300.00 }
-```
+Every financial operation creates **two ledger entries** — a debit for the sender and a credit for the receiver. This ensures the books always balance: the sum of all ledger entries across all accounts equals zero. Deposits create entries between the user and a special `SYSTEM` account.
 
-**Errors:** `404` if account not found.
+### 2. Derived Balances (No Stored Balance Column)
 
----
+Balance is always computed as `SUM(amount)` from the `ledger_entries` table. This eliminates an entire class of bugs where a cached/stored balance diverges from the actual transaction history.
 
-#### `POST /accounts/:id/deposit`
+**Trade-off:** Slightly slower balance queries for accounts with many transactions, mitigated by the `idx_ledger_user` index on `(user_id, created_at DESC)`.
 
-Deposit funds into an account (creates a credit ledger entry from SYSTEM).
+### 3. Idempotent Transfers via Database Constraints
 
-**Request:**
-```json
-{ "amount": 500.00 }
-```
+The `UNIQUE(transaction_id, user_id)` constraint (`idx_ledger_idempotency`) makes it impossible to create duplicate ledger entries at the database level. If the same `transaction_id` is resubmitted, the service layer returns the existing result with `status: "duplicate"` — making it safe to retry after network failures.
 
-**Response (201):**
-```json
-{ "transaction_id": "uuid", "amount": 500.00, "balance": 500.00 }
-```
+**Assumption:** The client generates a UUID (`transaction_id`) before each transfer request. The frontend does this using `crypto.randomUUID()`.
 
----
+### 4. SERIALIZABLE Isolation for Transfers
 
-#### `GET /accounts/:id/transactions`
+Transfers use PostgreSQL `SERIALIZABLE` isolation level to ensure the balance check → debit → credit sequence is fully atomic. If two concurrent transfers from the same account race, PostgreSQL's SSI (Serializable Snapshot Isolation) will fail one with a serialization error rather than allowing an overdraft.
 
-Get transaction history for an account (most recent first).
+**Assumption:** The application does not implement automatic retry on serialization failures — the client should retry the request.
 
-**Response (200):**
-```json
-[
-  {
-    "transaction_id": "uuid",
-    "type": "debit",
-    "amount": 200.00,
-    "counterparty_id": "bob",
-    "description": "Transfer to bob",
-    "created_at": "2026-06-29 12:05:00"
-  }
-]
-```
+### 5. JWT Authentication
 
----
+- Tokens are signed with HS256 and expire after **7 days**
+- Passwords are hashed with bcrypt (10 salt rounds)
+- Password policy enforces: 8+ characters, uppercase, lowercase, number, and special character
+- No refresh token flow — on expiry, the user must re-login
 
-### Transfers
+**Assumption:** This is acceptable for a wallet exercise. A production system would use short-lived access tokens + refresh tokens.
 
-#### `POST /transfers`
+### 6. NUMERIC(15,2) for Monetary Amounts
 
-Transfer money between accounts. **Idempotent** — re-submitting the same `transaction_id` returns the existing result without re-processing.
+All amounts are stored as PostgreSQL `NUMERIC(15,2)` — exact decimal representation with no floating-point precision issues. The application layer rounds to 2 decimal places before any database write.
 
-**Request:**
-```json
-{
-  "transaction_id": "550e8400-e29b-41d4-a716-446655440000",
-  "from_account": "alice",
-  "to_account": "bob",
-  "amount": 200.00
-}
-```
+**Assumption:** All amounts are in a single currency (no multi-currency support).
 
-**Response (201):**
-```json
-{
-  "transaction_id": "550e8400-e29b-41d4-a716-446655440000",
-  "from_account": "alice",
-  "to_account": "bob",
-  "amount": 200.00,
-  "timestamp": "2026-06-29 12:05:00",
-  "status": "completed"
-}
-```
+### 7. Account Visibility
 
-**Duplicate Response (200):**
-```json
-{ "...same fields...", "status": "duplicate" }
-```
+The `GET /accounts` endpoint returns all accounts with their balances to any authenticated user. This is intentional — it powers the transfer recipient picker in the frontend.
 
-**Errors:**
-- `400` — Insufficient funds, negative amount, or self-transfer
-- `404` — Source or destination account not found
+**Assumption:** In a production system, you would not expose balances of all users. This endpoint would either return only account IDs/names (no balances) or implement a search-based lookup.
 
----
+### 8. Schema Management
 
-## Design Decisions
-
-### 1. Derived Balances (No Stored Balance Column)
-
-Balance is always computed as `SUM(amount)` from ledger entries. This eliminates the entire class of bugs where a stored balance diverges from transaction history. Trade-off: slightly slower balance queries, mitigated by an index on `account_id`.
-
-### 2. Idempotency via Database Constraints
-
-The `UNIQUE(transaction_id, account_id)` index makes it impossible to insert duplicate ledger entries at the database level. The service layer catches constraint violations and returns the existing result — safe to retry after network failures.
-
-### 3. PostgreSQL SERIALIZABLE Isolation for Atomicity
-
-Transfers use `BEGIN ISOLATION LEVEL SERIALIZABLE` to ensure the balance check + debit + credit sequence is fully atomic. PostgreSQL's MVCC guarantees that concurrent transfers from the same account are properly serialized — if two transfers race, one will fail with a serialization error.
-
-### 4. Client-Generated Transaction IDs
-
-The frontend generates a UUID before each transfer. If the request fails after server-side processing, the user can safely retry — the server recognizes the duplicate and returns the existing result (idempotency).
-
-### 5. Double-Entry Ledger Model
-
-Every transfer creates two ledger entries: a debit for the sender and a credit for the receiver. This ensures the books always balance — the sum of all ledger entries across all accounts is always zero.
-
-### 6. NUMERIC(15,2) for Amounts
-
-PostgreSQL `NUMERIC` type stores exact decimal values — no floating-point precision issues. Amounts are stored with 2 decimal places.
+Prisma ORM handles schema definition and database synchronization via `prisma db push` (development) and generated migrations. The schema uses `@@map()` directives to maintain snake_case database naming conventions while using camelCase in TypeScript.
 
 ---
 
 ## Trade-offs
 
-| Decision | Benefit | Cost |
-|----------|---------|------|
-| PostgreSQL | Production-grade, ACID, real concurrency | Requires a running PG instance |
-| Derived balances | Impossible to desync | Slower queries for high-volume accounts |
-| SERIALIZABLE isolation | Strongest correctness guarantee | Slight overhead vs READ COMMITTED |
-| No authentication | Simpler for exercise scope | Not production-ready |
-| Docker Compose included | One-command database setup | Requires Docker (or local PG) |
+| Decision                     | Benefit                                       | Cost                                            |
+|------------------------------|-----------------------------------------------|--------------------------------------------------|
+| Derived balances             | Impossible to desync from transaction history  | Slower balance queries for high-volume accounts  |
+| SERIALIZABLE isolation       | Strongest correctness guarantee for transfers  | Higher overhead vs READ COMMITTED; retry on serialization failures |
+| Client-generated UUIDs       | Idempotency is trivial to implement            | Requires client cooperation; server cannot generate sequential IDs |
+| Double-entry bookkeeping     | Self-auditing ledger, books always balance     | 2× ledger entries per transaction                |
+| Prisma ORM                   | Type-safe queries, schema migrations           | Additional abstraction layer over raw SQL        |
+| JWT without refresh tokens   | Simpler auth flow, stateless                   | Users must re-login every 7 days                 |
+| All accounts visible         | Simple recipient selection UX                  | Not suitable for production with many users      |
 
 ---
 
 ## Running Tests
+
+### Backend (Integration Tests)
 
 ```bash
 cd backend
@@ -226,8 +227,42 @@ npm test
 ```
 
 Tests cover:
-- Account creation (success + duplicate + missing fields)
-- Balance retrieval (existing + non-existent accounts)
-- Deposits (success + negative amount + non-existent account)
-- Transfers (success + idempotency + insufficient funds + self-transfer + invalid accounts)
-- Transaction history retrieval
+- **Auth:** Registration (success, duplicate email, duplicate user_id, weak password, invalid email), login (success, wrong password, nonexistent user)
+- **Accounts:** Listing accounts, balance retrieval (existing + non-existent)
+- **Deposits:** Success, negative amount, non-existent account
+- **Transfers:** Success, idempotency (duplicate `transaction_id`), insufficient funds, self-transfer, invalid accounts
+- **Transactions:** History retrieval and ordering
+
+### Frontend (Unit Tests)
+
+```bash
+cd frontend
+npm test
+```
+
+Tests cover:
+- Password validation rules
+- User ID format validation
+- API client configuration
+- Date formatting utilities
+
+---
+
+## Development
+
+### Useful Commands
+
+```bash
+# Backend
+cd backend
+npm run dev              # Start dev server with hot reload (tsx watch)
+npm run typecheck        # Run TypeScript type checking
+npm test                 # Run integration tests
+npx prisma studio        # Open Prisma's database GUI
+
+# Frontend
+cd frontend
+npm run dev              # Start Next.js dev server
+npm test                 # Run unit tests
+npm run build            # Production build
+```

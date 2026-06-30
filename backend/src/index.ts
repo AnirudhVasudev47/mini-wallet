@@ -2,8 +2,10 @@ import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import morgan from "morgan";
+import swaggerUi from "swagger-ui-express";
 import { getPrisma, seedSystemAccount, disconnect } from "./database.js";
 import { AppError } from "./types.js";
+import { swaggerSpec } from "./swagger/index.js";
 import authRoutes from "./routes/auth.js";
 import accountRoutes from "./routes/accounts.js";
 import transferRoutes from "./routes/transfers.js";
@@ -11,9 +13,24 @@ import transferRoutes from "./routes/transfers.js";
 const app = express();
 
 // ── Middleware ─────────────────────────────────────────────────
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",")
+      : true,
+  }),
+);
 app.use(express.json());
 app.use(morgan("dev"));
+
+// ── Swagger UI ────────────────────────────────────────────────
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Mini Wallet API Docs',
+}));
+app.get("/api/docs.json", (_req: Request, res: Response) => {
+  res.json(swaggerSpec);
+});
 
 // ── Routes ────────────────────────────────────────────────────
 app.use("/api/v1/auth", authRoutes);
@@ -48,6 +65,7 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`🏦 Mini Wallet API running on http://localhost:${PORT}`);
     console.log(`   Health: http://localhost:${PORT}/api/health`);
+    console.log(`   Docs:   http://localhost:${PORT}/api/docs`);
   });
 }
 

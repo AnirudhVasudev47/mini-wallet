@@ -21,6 +21,8 @@
     "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "pg": "^8.16.0",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {
@@ -32,6 +34,8 @@
     "@types/morgan": "^1.9.0",
     "@types/pg": "^8.0.0",
     "@types/supertest": "^6.0.0",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
     "jest": "^29.0.0",
     "prisma": "^6.19.3",

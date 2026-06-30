@@ -9,15 +9,59 @@ const router = Router();
 router.use(requireAuth);
 
 /**
- * POST /api/v1/transfers
- * Execute a money transfer between two accounts.
+ * @openapi
+ * /transfers:
+ *   post:
+ *     tags: [Transfers]
+ *     summary: Execute a transfer
+ *     description: |
+ *       Transfers funds between two accounts using double-entry bookkeeping.
  *
- * The `from_user` is automatically set to the authenticated user's user_id.
- * The client only needs to provide `transaction_id`, `to_user`, `amount`,
- * and optionally `notes`.
+ *       **Key guarantees:**
+ *       - **Atomicity** — Both debit and credit happen in a single SERIALIZABLE transaction
+ *       - **Idempotency** — Re-submitting the same `transaction_id` returns the existing result with status `"duplicate"`
+ *       - **Consistency** — Balance is verified inside the transaction before debiting
  *
- * Idempotent: re-submitting the same transaction_id returns the existing result
- * with status "duplicate" instead of processing it again.
+ *       The `from_user` is automatically set to the authenticated user's `user_id`.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/TransferRequest'
+ *     responses:
+ *       201:
+ *         description: Transfer completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TransferResponse'
+ *       200:
+ *         description: Duplicate transaction (idempotent replay)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TransferResponse'
+ *       400:
+ *         description: Validation error (negative amount, same account, insufficient funds)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Not authenticated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Sender or recipient account not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/",
