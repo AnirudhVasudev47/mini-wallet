@@ -4,13 +4,7 @@ A full-stack digital wallet system built with double-entry bookkeeping, JWT auth
 
 ## 🌐 Live Demo
 
-| Service  | URL                                                                                                                     |
-|----------|-------------------------------------------------------------------------------------------------------------------------|
-| Frontend | [mini-wallet-frontend-883639585183.asia-south1.run.app](https://mini-wallet-frontend-883639585183.asia-south1.run.app)   |
-| Backend  | [mini-wallet-api-883639585183.asia-south1.run.app](https://mini-wallet-api-883639585183.asia-south1.run.app)             |
-| API Docs | [mini-wallet-api-…/api/docs](https://mini-wallet-api-883639585183.asia-south1.run.app/api/docs)                         |
-
-> Hosted on **Google Cloud Run** (asia-south1) with **Cloud SQL** PostgreSQL 16.
+**[mini-wallet-frontend-883639585183.asia-south1.run.app](https://mini-wallet-frontend-883639585183.asia-south1.run.app)**
 
 ---
 
