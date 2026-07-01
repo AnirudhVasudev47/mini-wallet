@@ -40,32 +40,30 @@ export async function createAccount(userId: string, name: string): Promise<Accou
 export async function listAccounts(): Promise<AccountWithBalance[]> {
   const prisma = getPrisma();
 
-  // Use raw query for the aggregate balance — Prisma doesn't support
-  // SUM across a relation in a single findMany call elegantly.
-  const rows = await prisma.$queryRaw<
-    Array<{
-      id: string;
-      user_id: string;
-      name: string;
-      created_at: Date;
-      balance: string;
-    }>
-  >`
-    SELECT a.id, a.user_id, a.name, a.created_at,
-           COALESCE(SUM(l.amount), 0)::NUMERIC(15,2) AS balance
-    FROM accounts a
-    LEFT JOIN ledger_entries l ON l.user_id = a.user_id
-    WHERE a.user_id != 'SYSTEM'
-    GROUP BY a.id, a.user_id, a.name, a.created_at
-    ORDER BY a.created_at DESC
-  `;
+  // Fetch all non-SYSTEM accounts
+  const accounts = await prisma.account.findMany({
+    where: { userId: { not: "SYSTEM" } },
+    orderBy: { createdAt: "desc" },
+  });
 
-  return rows.map((row) => ({
-    id: row.id,
-    user_id: row.user_id,
-    name: row.name,
-    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    balance: parseFloat(row.balance),
+  // Aggregate balances per user in a single query
+  const balances = await prisma.ledgerEntry.groupBy({
+    by: ["userId"],
+    where: { userId: { not: "SYSTEM" } },
+    _sum: { amount: true },
+  });
+
+  // Build a lookup map for O(n) merging
+  const balanceMap = new Map(
+    balances.map((b) => [b.userId, Number(b._sum.amount ?? 0)]),
+  );
+
+  return accounts.map((account) => ({
+    id: account.id,
+    user_id: account.userId,
+    name: account.name,
+    created_at: account.createdAt.toISOString(),
+    balance: balanceMap.get(account.userId) ?? 0,
   }));
 }
 
